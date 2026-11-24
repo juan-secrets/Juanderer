@@ -80,7 +80,7 @@ juanderer/
 
 | Option | Verdict |
 | --- | --- |
-| **WebGL (PixiJS)** | **Chosen.** Handles large maps, many tokens, lighting and fog masks at 60 fps. Already working in POC 01. |
+| **WebGL (PixiJS)** | **Chosen.** Handles large maps, many tokens, lighting and fog masks. Already working in POC 01. |
 | SVG | Rejected for the map: best accessibility (POC 02) but slows down with thousands of wall segments and fog shapes. Kept for small UI icons. |
 | Canvas 2D | Rejected: simpler than Pixi but we would re-build sprites, hit-testing and filters by hand. |
 
