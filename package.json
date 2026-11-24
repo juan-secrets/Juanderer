@@ -1,0 +1,14 @@
+{
+  "name": "juanderer",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n front,back -c cyan,magenta \"npm run dev -w frontend\" \"npm run dev -w backend\""
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}
