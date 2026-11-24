@@ -184,24 +184,3 @@ Rejected: rules only on the server (mobile and web previews would need a round-t
 | Performance   | Scripted socket load + timing logs                                  | Sync latency and line-of-sight computation time (required measurements)                     |
 
 CI blocks merging when any of these fail.
-
-## Consequences
-
-**Positive**
-
-- One language and one set of types across all workspaces: a renamed field breaks the build everywhere at once instead of failing at runtime.
-- Rules are written and tested once; server, web and mobile always agree.
-- Each developer can own and restart a service without stopping the others.
-- Plain SQL keeps transactions visible and needs no code generation.
-- Every piece has a free tier compatible with continuous deployment.
-
-**Negative / to watch**
-
-- **Consistency across services**: a database transaction cannot span two services. Keep everything a combat action touches (tokens, turn order, effects, log) inside the game service.
-- **Untyped SQL results**: `pg` returns untyped rows; validate them with Zod or type each query by hand.
-- **No migrations yet**: until a migration tool is chosen, schemas can drift between developers.
-- **WebSockets through the gateway**: the proxy needs `ws: true`, otherwise Socket.IO falls back to slow polling.
-- **Monorepo tooling**: React Native's bundler (Metro) needs configuring to resolve workspace packages.
-- **WebGL accessibility**: the map needs the parallel token list and keyboard controls to pass the audit.
-- **Free server sleeps**: the first request after 15 minutes idle is slow; never demo on a cold server.
-- **Single game-service instance**: Socket.IO state lives in memory. If we ever run two instances, add the Redis adapter.
