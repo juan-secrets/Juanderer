@@ -130,9 +130,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report-${{ github.sha }}
-          path: |
-            **/coverage/
-            !**/node_modules/**
+          path: coverage/
 
   build:
     needs: [format, lint, typecheck, coverage]

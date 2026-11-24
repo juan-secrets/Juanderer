@@ -32,6 +32,18 @@ cp backend/.env.example backend/.env   # set DATABASE_URL
 npm run dev                            # front: http://localhost:5173, gateway: http://localhost:3000, services: 3001+
 ```
 
+## Checks
+
+The CI runs these from the repository root on every push and pull request:
+
+```bash
+npm run format:check   # Prettier (npm run format to fix)
+npm run lint           # ESLint
+npm run typecheck      # tsc in every workspace
+npm run test:coverage  # Vitest, report in coverage/
+npm run build          # production build of every workspace
+```
+
 ## Adding a service
 
 1. Copy `backend/src/services/example/` to `backend/src/services/<name>/`.
