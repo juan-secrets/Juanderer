@@ -1,4 +1,4 @@
-# ADR 0001 — Technical stack
+# Technical stack
 
 - **Date:** 2026-11-24
 
@@ -16,7 +16,7 @@ The subject leaves the stack free but asks us to justify it. It also recommends 
 
 The team has already agreed on three constraints: **React** for the web, **Node.js** for the server, and **PostgreSQL** for the database. This ADR fills in the rest and records why.
 
-### Decision drivers
+### Important guidelines
 
 1. **One rules engine** shared by server, web and mobile, so the three can never disagree on a result.
 2. **Server-authoritative**: the server rolls the dice and filters hidden data. Clients only display and preview.
@@ -46,23 +46,6 @@ The team has already agreed on three constraints: **React** for the web, **Node.
 | Tests | Vitest (unit) · Playwright (web E2E) · Jest + React Native Testing Library (mobile UI) |
 | CI/CD | GitHub Actions: lint, typecheck, tests, build on every PR; deploy on merge to `main`; Android APK artifact on every merge |
 | Local setup | `docker compose up` starts Postgres, server and web |
-
-### Repository layout
-
-```text
-juanderer/
-├─ apps/
-│  ├─ web/         React: GM view, player view, character builder
-│  ├─ server/      Fastify API, Socket.IO, Prisma
-│  └─ mobile/      Expo app: character sheet, dice, turn alerts
-├─ packages/
-│  ├─ rules/       dice, checks, attacks, conditions, level-up (pure)
-│  ├─ shared/      domain types + Zod schemas for API and socket messages
-│  └─ ui-tokens/   Parchment & Ink colours, fonts, spacing
-├─ data/srd/       versioned SRD snapshots + import script
-├─ docs/           ADRs, data model, user and technical docs
-└─ docker-compose.yml
-```
 
 ## Options considered
 
