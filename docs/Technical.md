@@ -14,38 +14,68 @@ Juanderer is a virtual tabletop compatible with 5th edition. It needs:
 
 The subject leaves the stack free but asks us to justify it. It also recommends writing the rules engine **once** and reusing it on mobile.
 
-The team has already agreed on three constraints: **React** for the web, **Node.js** for the server, and **PostgreSQL** for the database. This ADR fills in the rest and records why.
+The team agreed on three constraints: **React** for the web, **Node.js** for the server, and **PostgreSQL** for the database.
 
 ### Important guidelines
 
 1. **One rules engine** shared by server, web and mobile, so the three can never disagree on a result.
 2. **Server-authoritative**: the server rolls the dice and filters hidden data. Clients only display and preview.
 3. **Consistency of linked data**: a combat action touches tokens, turn order, effects and the log at once.
-4. **Team speed**: 3 developers, about 9 working weeks, one language to learn.
-5. **Free hosting** that supports long-lived WebSocket connections.
+4. **Free hosting** that supports long-lived WebSocket connections.
 
 ## Decision
 
-**TypeScript everywhere**, in one **npm workspaces monorepo**.
+**TypeScript everywhere**, in one **npm workspaces monorepo** (`frontend`, `backend`). The backend is split into **small Express services behind a gateway**.
 
-| Concern | Decision |
+| Concern | Decision | In repo |
+| --- | --- | --- |
+| Language | TypeScript (strict) in every workspace | Yes |
+| Runtime | Node.js 24 LTS | Yes (no version pinned yet) |
+| Web front-end | React 19 + Vite | Yes |
+| Web state | TanStack Query (server data) + Zustand (live table state) | Planned |
+| Map rendering | PixiJS 8 (WebGL), with an accessible DOM token list alongside | Planned |
+| Server | Express 5 services, one per domain, each on its own port | Yes (`example` service) |
+| API entry point | Gateway (Express + `http-proxy-middleware`) forwarding `/api/<service>/*` to each service | Yes |
+| Database | PostgreSQL (relational + JSONB for raw SRD entries) | Yes |
+| Database access | `pg` connection pool, SQL queries | Yes |
+| Migrations | To decide: a SQL migration tool (for example `node-pg-migrate`) | No |
+| Validation | Zod schemas shared by API routes and socket handlers | Planned |
+| Real time | Socket.IO: one room per campaign plus a GM-only room | Planned |
+| Rules engine | Shared `rules` workspace: pure TypeScript, no I/O, injected random generator | Planned |
+| Mobile | React Native with Expo, **Android** target | Planned |
+| Auth | Email + password (argon2 hashes), HTTP-only session cookie on web, bearer token on mobile | Planned |
+| Hosting | Web: static site (Vercel or Netlify) · Server: Render free web service · Database: Neon free Postgres | Planned |
+| Tests | Vitest (unit) · Playwright (web E2E) · Jest + React Native Testing Library (mobile UI) | Planned |
+| CI/CD | GitHub Actions: typecheck, tests, build on every PR; deploy on merge to `main`; Android APK artifact on every merge | Planned |
+| Local setup | `npm install`, copy `backend/.env.example` to `backend/.env`, `npm run dev` | Yes (needs a local PostgreSQL) |
+
+### Repository layout
+
+```text
+juanderer/
+├── package.json              # npm workspaces; `npm run dev` starts everything
+├── frontend/                 # React 19 + Vite
+│   ├── vite.config.ts        # dev server proxies /api to the gateway (port 3000)
+│   └── src/
+├── backend/
+│   ├── .env.example          # DATABASE_URL template
+│   └── src/
+│       ├── config.ts         # service ports, gateway port, database URL
+│       ├── gateway/          # single entry point on port 3000
+│       └── services/
+│           └── example/      # template service (port 3001), `db.ts` holds the pg pool
+└── docs/
+```
+
+Planned workspaces: `rules/` (shared rules engine), `shared/` (types and Zod schemas) and `mobile/` (Expo app), each added to the root `workspaces` list.
+
+### Ports in development
+
+| Process | Port |
 | --- | --- |
-| Language | TypeScript (strict) in every app and package |
-| Web front-end | React 18 + Vite |
-| Web state | TanStack Query (server data) + Zustand (live table state) |
-| Map rendering | PixiJS 8 (WebGL), with an accessible DOM token list alongside |
-| Server | Node.js 20 LTS + Fastify |
-| ORM / migrations | Prisma (schema, typed client, `prisma migrate`) |
-| Database | PostgreSQL 16 (relational + JSONB for raw SRD entries) |
-| Validation | Zod schemas in `packages/shared`, used by API routes and socket handlers |
-| Real time | Socket.IO: one room per campaign plus a GM-only room |
-| Rules engine | `packages/rules`: pure TypeScript, no I/O, injected random generator |
-| Mobile | React Native with Expo, **Android** target |
-| Auth | Email + password (argon2 hashes), HTTP-only session cookie on web, bearer token on mobile |
-| Hosting | Web: static site (Vercel or Netlify) · Server: Render free web service · Database: Neon free Postgres |
-| Tests | Vitest (unit) · Playwright (web E2E) · Jest + React Native Testing Library (mobile UI) |
-| CI/CD | GitHub Actions: lint, typecheck, tests, build on every PR; deploy on merge to `main`; Android APK artifact on every merge |
-| Local setup | `docker compose up` starts Postgres, server and web |
+| Frontend (Vite) | 5173 |
+| Gateway | 3000 |
+| Services | 3001 and up, one per service, set in `backend/src/config.ts` |
 
 ## Options considered
 
@@ -53,8 +83,8 @@ The team has already agreed on three constraints: **React** for the web, **Node.
 
 | Option | Verdict |
 | --- | --- |
-| **React + Vite** | **Chosen.** Team requirement; largest ecosystem; shares components and hooks logic with React Native. Vite gives fast dev builds. |
-| Next.js | Rejected. Server rendering brings nothing to a logged-in, real-time table and complicates hosting the Socket.IO server. |
+| **React + Vite** | **Chosen.** Team requirement; largest ecosystem; same React knowledge as the mobile app, which can share types, rules and data hooks. Vite gives fast dev builds and a dev proxy to the gateway. |
+| Next.js | Rejected. Server rendering brings nothing to a logged-in, real-time table and complicates hosting the real-time server. |
 | Svelte / Vue | Rejected by the team constraint; POC 02 (Svelte) showed no gain worth a second paradigm. |
 
 **State.** TanStack Query caches REST data (campaigns, characters, SRD lookups) and handles refetching. Zustand holds the fast-changing table state fed by socket events (token positions, turn, fog). Redux was rejected as heavier for the same result.
@@ -73,11 +103,13 @@ The team has already agreed on three constraints: **React** for the web, **Node.
 
 | Option | Verdict |
 | --- | --- |
-| **Node.js + Fastify** | **Chosen.** Team requirement for Node. Fastify has schema-based validation, good TypeScript types and a plugin system; it hosts Socket.IO on the same HTTP server. |
-| Express | Rejected: works, but no built-in validation or typing; we would add them ourselves. |
-| NestJS | Rejected: strong structure, but decorators, modules and DI are a lot to learn. |
+| **Express 5, split into services behind a gateway** | **Chosen.** Express is the framework the whole team already knows, and version 5 forwards errors from `async` handlers without extra code. One service per domain (for example auth, campaigns, characters, game) lets each developer own a service with its own port and restart it alone. The gateway gives the frontend a single `/api` origin. |
+| Fastify, single server | Not chosen: built-in schema validation and faster routing, but a new framework to learn; validation will come from Zod instead. |
+| NestJS | Rejected: strong structure, but decorators, modules and dependency injection are a lot to learn. |
 
-### Database and ORM
+Adding a service: copy `backend/src/services/example/`, register its port in `backend/src/config.ts`, add a `dev:<name>` script in `backend/package.json`. It is then reachable at `/api/<name>/...`.
+
+### Database and access layer
 
 | Option | Verdict |
 | --- | --- |
@@ -85,11 +117,13 @@ The team has already agreed on three constraints: **React** for the web, **Node.
 | MongoDB | Rejected. Flexible for SRD documents, but consistency between records (a combat pointing at a deleted token) would be our code's job. |
 | Supabase (managed Postgres + auth + realtime) | Rejected. Saves auth work, but Row Level Security would replace our own permission code, which is harder to test and to explain; free projects pause after a week without activity. |
 
-| ORM option | Verdict |
+| Access option | Verdict |
 | --- | --- |
-| **Prisma** | **Chosen.** Readable schema file, generated typed client, `prisma migrate` for versioned migrations, Prisma Studio for debugging. |
-| Drizzle | Good alternative (SQL-like, lighter). Not chosen because Prisma's schema file doubles as data-model documentation. |
-| TypeORM / raw `pg` | Rejected: weaker typing or more boilerplate. |
+| **`pg` (node-postgres) with SQL** | **Chosen.** No generated client or build step; every query is visible SQL, which keeps transactions explicit. Each service creates its pool lazily from `DATABASE_URL`. |
+| Prisma | Not chosen for now: typed client and migrations, but adds a schema file and a generation step to every service. |
+| Drizzle | Possible later if typed queries become necessary; it works on top of the same `pg` driver. |
+
+**Open point:** a migration tool is still needed so every developer and the hosted database share the same schema. Decide it before the first table is created.
 
 ### Real-time transport
 
@@ -100,15 +134,17 @@ The team has already agreed on three constraints: **React** for the web, **Node.
 | Server-Sent Events + POST | Rejected: works (POC 02) but one-way; every action becomes a separate HTTP call. |
 | Supabase / Firebase realtime | Rejected: moves visibility rules out of our server. |
 
+Socket.IO will live in one dedicated service (the game service). The gateway must forward WebSocket upgrades to it (`ws: true` in its proxy options), and the Vite dev proxy must do the same.
+
 **Protocol rule:** clients send *intents* (`token:move`, `roll:request`, `attack:declare`), the server validates them with Zod, applies the rules, and broadcasts a *filtered* result per room. A player never receives data they are not allowed to see (hidden tokens, fogged areas, GM rolls).
 
 ### Rules engine
 
-**Decision:** `packages/rules`, a pure TypeScript package.
+**Decision:** a `rules` workspace, a pure TypeScript package.
 
 - Pure functions only: input state → output state + events. No database, no network, no `Math.random()` inside: the random generator is passed in, so tests are deterministic and the server stays the source of truth.
-- Imported by **server** (authoritative resolution), **web** (instant previews: "this attack needs 15 to hit") and **mobile** (sheet maths, dice).
-- 100% of the required rules tests (combat resolution, level-up) live here and run with Vitest.
+- Imported by the **backend services** (authoritative resolution), the **frontend** (instant previews: "this attack needs 15 to hit") and **mobile** (sheet maths, dice).
+- The required rules tests (combat resolution, level-up) live here and run with Vitest.
 
 Rejected: rules only on the server (mobile and web previews would need a round-trip for every number), or rules duplicated per app (three implementations to keep in sync).
 
@@ -116,7 +152,7 @@ Rejected: rules only on the server (mobile and web previews would need a round-t
 
 | Option | Verdict |
 | --- | --- |
-| **React Native + Expo** | **Chosen.** Native UI components (allowed by the subject: not a WebView). Same language and React knowledge as the web; imports `packages/rules` and `packages/shared` directly. Expo simplifies builds and device testing. |
+| **React Native + Expo** | **Chosen.** Native UI components (allowed by the subject: not a WebView). Same language and React knowledge as the web; imports the `rules` and `shared` workspaces directly. Expo simplifies builds and device testing. |
 | Native Kotlin (Jetpack Compose) | Rejected: rules would have to be re-written in Kotlin or only run on the server. |
 | Flutter | Rejected: Dart, so no shared rules package. |
 | PWA / Capacitor / Ionic | **Forbidden** by the subject. |
@@ -134,13 +170,15 @@ Rejected: rules only on the server (mobile and web previews would need a round-t
 | Database | **Neon** free Postgres | 1 GB per project on the free plan; scales compute to zero when idle. |
 | Fallback | Koyeb free instance for the server | Its free instance also sleeps, after 60 minutes of inactivity. |
 
+**Deploying the services:** in production the gateway and all services run as **one** web service (one container starting every process), so the free tier sleeps and wakes them together instead of once per service.
 
 ### Tests
 
 | Level | Tool | What it covers |
 | --- | --- | --- |
-| Unit | Vitest | `packages/rules` (dice, attacks, saves, conditions, level-up), server services, React hooks |
-| API / socket | Vitest + Fastify `inject` + Socket.IO client | Permissions, GM-only filtering, intent validation |
+| Type checking | `tsc` (`npm run typecheck -w backend`, `npm run build -w frontend`) | Already in the repo |
+| Unit | Vitest | `rules` (dice, attacks, saves, conditions, level-up), service logic, React hooks |
+| API / socket | Vitest + Supertest + Socket.IO client | Permissions, GM-only filtering, intent validation |
 | Web E2E | Playwright | Sign-up → campaign → invite → character → move token → roll, with a GM and a player browser |
 | Mobile UI | Jest + React Native Testing Library | Sheet rendering, roll buttons, turn alert |
 | Performance | Scripted socket load + timing logs | Sync latency and line-of-sight computation time (required measurements) |
@@ -153,13 +191,17 @@ CI blocks merging when any of these fail.
 
 - One language and one set of types across all workspaces: a renamed field breaks the build everywhere at once instead of failing at runtime.
 - Rules are written and tested once; server, web and mobile always agree.
-- PostgreSQL + Prisma give consistent combat state and versioned migrations.
+- Each developer can own and restart a service without stopping the others.
+- Plain SQL keeps transactions visible and needs no code generation.
 - Every piece has a free tier compatible with continuous deployment.
 
 **Negative / to watch**
 
+- **Consistency across services**: a database transaction cannot span two services. Keep everything a combat action touches (tokens, turn order, effects, log) inside the game service.
+- **Untyped SQL results**: `pg` returns untyped rows; validate them with Zod or type each query by hand.
+- **No migrations yet**: until a migration tool is chosen, schemas can drift between developers.
+- **WebSockets through the gateway**: the proxy needs `ws: true`, otherwise Socket.IO falls back to slow polling.
 - **Monorepo tooling**: React Native's bundler (Metro) needs configuring to resolve workspace packages.
 - **WebGL accessibility**: the map needs the parallel token list and keyboard controls to pass the audit.
-- **Schema changes** need a Prisma migration each time; review migrations like code.
 - **Free server sleeps**: the first request after 15 minutes idle is slow; never demo on a cold server.
-- **Single server instance**: Socket.IO state lives in memory. If we ever run two instances, add the Redis adapter.
+- **Single game-service instance**: Socket.IO state lives in memory. If we ever run two instances, add the Redis adapter.
