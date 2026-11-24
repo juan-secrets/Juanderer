@@ -1,0 +1,24 @@
+{
+  "name": "juanderer-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n gateway,example -c magenta,yellow \"npm run dev:gateway\" \"npm run dev:example\"",
+    "dev:gateway": "tsx watch src/gateway/index.ts",
+    "dev:example": "tsx watch src/services/example/index.ts",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "http-proxy-middleware": "^4.2.2",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "concurrently": "^10.0.7",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
